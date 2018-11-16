@@ -1,0 +1,3 @@
+google_creds_file = "/Users/foo/.config/gcloud/creds.json"
+google_project_id = "my-google-project-id"
+google_region = "us-east1"
