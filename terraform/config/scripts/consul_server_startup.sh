@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-sudo yum install -y unzip
+sudo yum install -y unzip dnsmasq
 
 curl -o "/tmp/consul.zip" "https://releases.hashicorp.com/consul/1.3.0/consul_1.3.0_linux_amd64.zip"
 unzip "/tmp/consul.zip" -d "/usr/local/bin/"
@@ -41,3 +41,16 @@ EOF
 # Enable & Start the service.
 systemctl enable consul.service
 systemctl start consul.service
+
+# Configure dnsmasq
+cat <<EOF > /etc/dnsmasq.d/10-consul
+# Enable forward lookup of the 'consul' domain:
+server=/consul/127.0.0.1#8600
+EOF
+
+# Configure resolv.conf to check dnsmasq first (dnsmasq knows to ignore this!)
+sed -i '/nameserver/i nameserver 127.0.0.1' /etc/resolv.conf
+
+# Enable & Start the service.
+systemctl enable dnsmasq
+systemctl start dnsmasq

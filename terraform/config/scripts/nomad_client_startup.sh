@@ -1,7 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-sudo yum install -y unzip
+# install some needed packages, most importantly, docker + dnsmasq
+sudo yum install --assumeyes unzip yum-utils device-mapper-persistent-data lvm2 dnsmasq
+sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+sudo yum install --assumeyes docker-ce
 
 curl -o "/tmp/consul.zip" "https://releases.hashicorp.com/consul/1.3.0/consul_1.3.0_linux_amd64.zip"
 unzip "/tmp/consul.zip" -d "/usr/local/bin/"
@@ -21,6 +24,7 @@ sudo mkdir --parents /etc/consul.d
 sudo useradd --system --home /etc/nomad.d --shell /bin/false nomad
 sudo mkdir --parents /opt/nomad
 sudo mkdir --parents /etc/nomad.d
+sudo usermod -aG docker nomad
 
 # Add files to those directories, and make sure consul owns them
 sudo chown --recursive consul:consul /etc/consul.d
@@ -43,11 +47,13 @@ sudo chown --recursive nomad:nomad /opt/nomad
 cat <<EOF > /etc/systemd/system/consul.service
 [Unit]
 Description=consul
+Requires=network-online.target
+After=network-online.target
 
 [Service]
 User=consul
 Group=consul
-ExecStart=/usr/local/bin/consul agent -config-dir=/etc/consul.d -data-dir=/etc/consul.d -retry-join "provider=gce tag_value=consulserver" 
+ExecStart=/usr/local/bin/consul agent -config-dir=/etc/consul.d -data-dir=/etc/consul.d -retry-join "provider=gce tag_value=consulserver"
 [Install]
 WantedBy=multi-user.target
 EOF
@@ -55,6 +61,10 @@ EOF
 # Enable & Start the service.
 systemctl enable consul.service
 systemctl start consul.service
+
+# start the docker daemon
+sudo systemctl enable docker
+sudo systemctl start docker
 
 # Create the systemd unit files for the nomad service
 cat <<EOF > /etc/systemd/system/nomad.service
@@ -72,3 +82,16 @@ EOF
 # Enable & Start the service.
 systemctl enable nomad.service
 systemctl start nomad.service
+
+# Configure dnsmasq
+cat <<EOF > /etc/dnsmasq.d/10-consul
+# Enable forward lookup of the 'consul' domain:
+server=/consul/127.0.0.1#8600
+EOF
+
+# Configure resolv.conf to check dnsmasq first (dnsmasq knows to ignore this!)
+sed -i '/nameserver/i nameserver 127.0.0.1' /etc/resolv.conf
+
+# Enable & Start the service.
+systemctl enable dnsmasq
+systemctl start dnsmasq
