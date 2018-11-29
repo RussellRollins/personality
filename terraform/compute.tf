@@ -84,7 +84,6 @@ resource "google_compute_instance" "nomad_client" {
   }
 }
 
-
 output "nomad_server_url" {
   value = "${google_compute_instance.nomad_server.*.self_link[0]}"
 }
